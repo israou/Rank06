@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/select.h>
-
 int extract_message(char **buf, char **msg)
 {
 	char	*newbuf;
@@ -34,7 +33,6 @@ int extract_message(char **buf, char **msg)
 	}
 	return (0);
 }
-
 char *str_join(char *buf, char *add)
 {
 	char	*newbuf;
@@ -54,6 +52,9 @@ char *str_join(char *buf, char *add)
 	strcat(newbuf, add);
 	return (newbuf);
 }
+
+//END COPY-PASTE
+
 int fds[700000],max_fd, fds_count = 0;
 char *msgs[700000];
 char notifMessage[42];
@@ -70,21 +71,19 @@ void Notification(int fd, char *msg)
 {
     for (int i = 0; i < max_fd + 1; i++)
     {
-        if (FD_ISSET(i, &writefds) && i != fd)
+        if (FD_ISSET(i, &writefds) && i != fd) 
             send(i, msg, strlen(msg), 0);
     }
 }
-
 void add_client(int fd)
 {
     max_fd = fd > max_fd ? fd : max_fd;
     fds[fd] = fds_count++;
     FD_SET(fd, &global_fd);
     msgs[fd] = NULL;
-    sprintf(notifMessage, "server: client %d just arriver\n", fds[fd]);
+    sprintf(notifMessage, "server: client %d just arrived\n", fds[fd]);
     Notification(fd, notifMessage);
 }
-
 void remove_client(int fd)
 {
     sprintf(notifMessage, "server: client %d just left\n", fds[fd]);
@@ -94,7 +93,6 @@ void remove_client(int fd)
     if (msgs[fd] != NULL) free(msgs[fd]);
     msgs[fd] = NULL;
 }
-
 void send_message(int fd)
 {
     char *msg;
@@ -106,43 +104,60 @@ void send_message(int fd)
         free(msg);
     }
 }
-
-int main() {
+int main(int ac,char **av) {
 	int sockfd, connfd, len;
 	struct sockaddr_in servaddr, cli; 
 
+    if (ac !=2) error("Wrong number of arguments\n");//TO_ADD
 	// socket create and verification 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0); 
-	if (sockfd == -1) { 
-		printf("socket creation failed...\n"); 
-		exit(0); 
-	} 
-	else
-		printf("Socket successfully created..\n"); 
+	if (sockfd == -1) error("Fatal error\n");//hadii
 	bzero(&servaddr, sizeof(servaddr)); 
-
 	// assign IP, PORT 
 	servaddr.sin_family = AF_INET; 
 	servaddr.sin_addr.s_addr = htonl(2130706433); //127.0.0.1
-	servaddr.sin_port = htons(8081); 
+	servaddr.sin_port = htons(atoi(av[1])); //hadii
   
 	// Binding newly created socket to given IP and verification 
-	if ((bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr))) != 0) { 
-		printf("socket bind failed...\n"); 
-		exit(0); 
-	} 
-	else
-		printf("Socket successfully binded..\n");
-	if (listen(sockfd, 10) != 0) {
-		printf("cannot listen\n"); 
-		exit(0); 
-	}
-	len = sizeof(cli);
-	connfd = accept(sockfd, (struct sockaddr *)&cli, (socklen_t *)&len);
-	if (connfd < 0) { 
-        printf("server acccept failed...\n"); 
-        exit(0); 
-    } 
-    else
-        printf("server acccept the client...\n");
+	if ((bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr))) != 0) error("Fatal error\n");//modifier l erreur
+	//hbes hna
+	if (listen(sockfd, 10) != 0) error("Fatal error\n");//hadi
+
+    FD_ZERO(&global_fd);
+    FD_SET(sockfd, &global_fd);
+    max_fd = sockfd;
+    while(1)
+    {
+        readfds =  writefds = global_fd;
+        if (select(max_fd + 1, &readfds, &writefds, NULL, NULL) < 0)
+            error("Fatal error\n");
+        
+        for (int i = 0; i < max_fd + 1; i++)
+        {
+            if (FD_ISSET(i, &readfds))
+            {
+                if (i == sockfd)
+                {
+                    len = sizeof(cli);
+                    connfd = accept(sockfd, (struct sockaddr *)&cli, (socklen_t *)&len);
+                    if (connfd < 0) return 0;
+                    add_client(connfd);
+                    break;
+                }
+                else
+                {
+                    int n = recv(i, buffer, 1000, 0);
+                    if (n <= 0)
+                        remove_client(i);
+                    else
+                    {
+                        buffer[n] = 0;
+                        msgs[i] = str_join(msgs[i], buffer);
+                        send_message(i);
+                    }
+                    break;
+                }
+            }
+        }
+    }
 }
